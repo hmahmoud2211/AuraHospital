@@ -3,7 +3,7 @@ import React from 'react'
 import tw from 'twrnc';  // Import tw from 'twrnc'
 import { StatusBar } from 'expo-status-bar'
 import Animated,{ FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
-
+// hajar
 export default function LoginScreen() {
     const navigation = useNavigation();
     return (
