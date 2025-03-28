@@ -14,7 +14,8 @@ export default function SignupScreen() {
         {/* lights */}
         <View className="flex-row justify-around w-full absolute">
 
-
+{/* mallak */}
+{/* we need to solve the errror  */}
         </View>
 
 
