@@ -11,7 +11,7 @@ export default function SignupScreen() {
             <StatusBar style="light" />
             <Image className="h-full w-full absolute" source={require('../assets/hospital.png')} />
 
-        {/* lights */}
+        {/* lights .....*/}
         <View className="flex-row justify-around w-full absolute">
 
 {/* mallak */}
