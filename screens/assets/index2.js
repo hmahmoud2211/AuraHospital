@@ -99,7 +99,14 @@ const styles = StyleSheet.create({
   },
   chatBody: {
     marginTop: 15,
+    flexDirection: "column", // Must be inside quotes
+    gap: 20, // No 'px' needed in React Native
+    height: 460,
+    marginBottom: 82,
+    paddingVertical: 25,
+    paddingHorizontal: 22,
   },
+  
   botMessage: {
     flexDirection: "row",
     alignItems: "center",
