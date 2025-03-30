@@ -19,7 +19,7 @@ export default function LoginScreen() {
                 {/* Title */}
                 <View style={tw`w-full flex items-center mb-10`}>
                     <Animated.Text entering={FadeInUp.duration(1000).springify()} style={tw`text-black font-bold tracking-wider text-5xl`}>
-                        Login 
+                        Find your account
                     </Animated.Text>
                 </View>
                 {/* form */}
@@ -30,24 +30,8 @@ export default function LoginScreen() {
                             { height: 60 }
                         ]}>
                         <TextInput 
-                            placeholder='Email' 
+                            placeholder='Email or Username' 
                             placeholderTextColor={'gray'} 
-                            style={[
-                                tw`text-lg px-5`,
-                                { height: '100%' }
-                            ]}
-                        />
-                    </Animated.View>
-
-                    <Animated.View entering={FadeInDown.delay(200).duration(1000).springify()} 
-                        style={[
-                            tw`bg-white/80 rounded-2xl w-full mb-6 overflow-hidden`,
-                            { height: 60 }
-                        ]}>
-                        <TextInput 
-                            placeholder='Password' 
-                            placeholderTextColor={'gray'} 
-                            secureTextEntry
                             style={[
                                 tw`text-lg px-5`,
                                 { height: '100%' }
@@ -56,29 +40,23 @@ export default function LoginScreen() {
                     </Animated.View>
 
                     <Animated.View entering={FadeInDown.delay(400).duration(1000).springify()} style={tw`w-full mb-6`}>
-                        <TouchableOpacity 
+                        <TouchableOpacity onPress={() => navigation.push('NewPassword')}
                             style={[
                                 tw`w-full bg-sky-400 rounded-xl items-center justify-center`,
                                 { height: 55 }
                             ]}>
                             <Text style={tw`text-xl font-bold text-white text-center`}>
-                                Login
+                                Continue
                             </Text>
                         </TouchableOpacity>
                     </Animated.View>
 
                     <Animated.View entering={FadeInDown.delay(600).duration(1000).springify()} style={tw`flex-row justify-center items-center space-x-2`}>
-                        <Text style={tw`text-base`}>Don't have an account?</Text>
-                        <TouchableOpacity onPress={() => navigation.push('SignUp')}>
-                            <Text style={tw`text-sky-600 font-semibold text-base`}> SignUP</Text>
+                        <TouchableOpacity onPress={() => navigation.push('MobileNumber')}>
+                            <Text style={tw`text-sky-600 font-semibold text-base`}>Find by mobile number</Text>
                         </TouchableOpacity>
                     </Animated.View>
 
-                    <Animated.View entering={FadeInDown.delay(800).duration(1000).springify()} style={tw`flex-row justify-center items-center space-x-2`}>
-                    <TouchableOpacity onPress={() => navigation.push('ForgotPassword')}>
-                            <Text style={tw`text-sky-600 font-semibold text-base`}>Forgot password?</Text>
-                    </TouchableOpacity>
-                    </Animated.View>
                 </View>
             </View>
         </View>
