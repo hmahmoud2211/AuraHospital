@@ -70,8 +70,14 @@ export default function LoginScreen() {
                     <Animated.View entering={FadeInDown.delay(600).duration(1000).springify()} style={tw`flex-row justify-center items-center space-x-2`}>
                         <Text style={tw`text-base`}>Don't have an account?</Text>
                         <TouchableOpacity onPress={() => navigation.push('SignUp')}>
-                            <Text style={tw`text-sky-600 font-semibold text-base`}>SignUP!</Text>
+                            <Text style={tw`text-sky-600 font-semibold text-base`}> SignUP</Text>
                         </TouchableOpacity>
+                    </Animated.View>
+
+                    <Animated.View entering={FadeInDown.delay(800).duration(1000).springify()} style={tw`flex-row justify-center items-center space-x-2`}>
+                    <TouchableOpacity onPress={() => navigation.push('ForgotPassword')}>
+                            <Text style={tw`text-sky-600 font-semibold text-base`}>Forgot password?</Text>
+                    </TouchableOpacity>
                     </Animated.View>
                 </View>
             </View>
