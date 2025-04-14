@@ -39,6 +39,22 @@ export default function LoginScreen() {
                         />
                     </Animated.View>
 
+                    <Animated.View entering={FadeInDown.delay(200).duration(1000).springify()} 
+                        style={[
+                            tw`bg-white/80 rounded-2xl w-full mb-6 overflow-hidden`,
+                            { height: 60 }
+                        ]}>
+                        <TextInput 
+                            placeholder='Mobile number' 
+                            placeholderTextColor={'gray'} 
+                            secureTextEntry
+                            style={[
+                                tw`text-lg px-5`,
+                                { height: '100%' }
+                            ]}
+                        />
+                    </Animated.View>
+
                     <Animated.View entering={FadeInDown.delay(400).duration(1000).springify()} style={tw`w-full mb-6`}>
                         <TouchableOpacity onPress={() => navigation.push('NewPassword')}
                             style={[
@@ -48,12 +64,6 @@ export default function LoginScreen() {
                             <Text style={tw`text-xl font-bold text-white text-center`}>
                                 Continue
                             </Text>
-                        </TouchableOpacity>
-                    </Animated.View>
-
-                    <Animated.View entering={FadeInDown.delay(600).duration(1000).springify()} style={tw`flex-row justify-center items-center space-x-2`}>
-                        <TouchableOpacity onPress={() => navigation.push('MobileNumber')}>
-                            <Text style={tw`text-sky-600 font-semibold text-base`}>Find by mobile number</Text>
                         </TouchableOpacity>
                     </Animated.View>
 
