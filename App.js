@@ -1,29 +1,17 @@
-// In App.js in a new project
+import { Stack } from 'expo-router';
+import { useEffect } from 'react';
+import { useColorScheme } from 'react-native';
+import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 
-import * as React from 'react';
-import { View, Text } from 'react-native';
-import { NavigationContainer} from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import LoginScreen from './screens/LoginScreen';
-import SignupScreen from './screens/SignupScreen';
-import ChatbotScreen from './screens/Chatbot'
-import ForgotPasswordScreenScreen from './screens/ForgotPasswordScreen'
-import NewPasswordScreen from './screens/NewPasswordScreen'
+export default function App() {
+  const colorScheme = useColorScheme();
 
-const Stack = createNativeStackNavigator();
-
-function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName='Login' screenOptions={{headerShown: false}}>
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="SignUp" component={SignupScreen} />
-        <Stack.Screen name="Chatbot" component={ChatbotScreen} />
-        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreenScreen} />
-        <Stack.Screen name="NewPassword" component={NewPasswordScreen} />
-      </Stack.Navigator>
-    </NavigationContainer> 
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+      </Stack>
+    </ThemeProvider>
   );
 }
-
-export default App;
