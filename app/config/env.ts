@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 
 export const ENV = {
   // Groq API configuration
-  GROQ_API_KEY: Constants.expoConfig?.extra?.groqApiKey || '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',
+  GROQ_API_KEY: Constants.expoConfig?.extra?.groqApiKey || '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',
   GROQ_API_URL: 'https://api.groq.com/openai/v1/audio/transcriptions',
   
   // Whisper model configuration

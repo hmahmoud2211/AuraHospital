@@ -26,7 +26,7 @@ export const ENDPOINTS = {
 };
 
 export const GROQ_CONFIG = {
-  API_KEY: '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',
+  API_KEY: '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',
   API_URL: 'https://api.groq.com/openai/v1/audio/transcriptions',
   MODEL: 'whisper-large-v3-turbo',
   TEMPERATURE: 0,
