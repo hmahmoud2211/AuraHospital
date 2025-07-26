@@ -167,7 +167,7 @@ const SOAPExamination: React.FC<SOAPExaminationProps> = ({
       console.log('✅ Recording started successfully');
       Alert.alert(
         "🎤 Voice Recording Active", 
-        `Recording started for ${field}.\n\n🔴 SPEAK NOW\n\nTap the microphone again to stop recording.`,
+        `Recording started for ${field}.\n\n🔴 SPEAK CLEARLY AND LOUDLY\n📱 Hold phone close to your mouth\n⏱️ Speak for at least 2-3 seconds\n🗣️ Example: "Patient has a fever and cough"\n\nTap the microphone again to stop recording.`,
         [
           {
             text: "Cancel Recording",
@@ -248,22 +248,32 @@ const SOAPExamination: React.FC<SOAPExaminationProps> = ({
         );
       } else if (result.error && !cancelled) {
         console.error('❌ Recording failed:', result.error);
+        
+        // Special handling for "Thank you" transcription issue
+        const isThankYouIssue = result.error.includes('Thank you');
+        
         Alert.alert(
-          "Recording Failed", 
-          `${result.error}\n\nWould you like to try again or add sample text?`,
+          isThankYouIssue ? "🔧 Microphone Issue Detected" : "Recording Failed", 
+          isThankYouIssue 
+            ? `The system keeps hearing "Thank you" instead of your speech. This usually means:\n\n🔇 Microphone too quiet/far away\n🎤 Browser audio issues\n🌐 Need better microphone setup\n\n${result.error}`
+            : `${result.error}`,
           [
+            ...(isThankYouIssue ? [{
+              text: "🧪 Test Microphone",
+              onPress: testMicrophone
+            }] : []),
             {
-              text: "Try Again",
+              text: "🔄 Try Again",
               onPress: () => startVoiceRecording(field)
             },
             {
-              text: "Add Sample Text",
+              text: "📝 Type Instead",
               onPress: () => {
-                const sampleText = "Sample text for testing";
-                const currentText = soapData[field];
-                const newText = currentText ? `${currentText} ${sampleText}` : sampleText;
-                handleInputChange(field, newText);
-                Alert.alert("Test Mode", `Sample text added to ${field}`);
+                Alert.alert(
+                  "Manual Input", 
+                  `Please type your ${field} manually in the text field above.`,
+                  [{ text: "OK" }]
+                );
               }
             },
             {
@@ -314,6 +324,37 @@ const SOAPExamination: React.FC<SOAPExaminationProps> = ({
     Alert.alert("Test Successful", `Test text has been added to the ${field} field!`);
   };
 
+  const testMicrophone = async () => {
+    Alert.alert(
+      "🎤 Microphone Test", 
+      "Testing your microphone...",
+      [{ text: "OK" }]
+    );
+    
+    try {
+      const success = await voiceRecordingService.testMicrophone();
+      if (success) {
+        Alert.alert(
+          "✅ Microphone Test Successful!", 
+          "Your microphone is working properly. If you're still getting 'Thank you', try:\n\n• Speaking LOUDER and more clearly\n• Getting closer to your microphone\n• Using headphones with a microphone\n• Testing in a quieter environment",
+          [{ text: "Got it!" }]
+        );
+      } else {
+        Alert.alert(
+          "❌ Microphone Test Failed", 
+          "There's an issue with your microphone. Please:\n\n• Check browser permissions\n• Allow microphone access\n• Try refreshing the page\n• Use a different browser",
+          [{ text: "OK" }]
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        "❌ Test Error", 
+        `Microphone test failed: ${error}`,
+        [{ text: "OK" }]
+      );
+    }
+  };
+
   const renderVoiceButton = (field: keyof SOAPData) => {
     const isRecordingThisField = isVoiceRecording === field;
     
@@ -346,14 +387,19 @@ const SOAPExamination: React.FC<SOAPExaminationProps> = ({
           )}
         </TouchableOpacity>
         
-        {/* Add a small test button for debugging */}
+        {/* Add helper buttons for debugging and testing */}
         <TouchableOpacity 
           style={styles.testButton}
           onPress={() => testTextInput(field)}
           onLongPress={() => {
             Alert.alert(
-              "Voice Recording Test", 
-              "Long press detected! This button adds test text to verify the input field is working correctly."
+              "Test Options", 
+              "• Tap: Add sample text\n• Long press + Hold: Test microphone",
+              [
+                { text: "Test Microphone", onPress: testMicrophone },
+                { text: "Add Sample Text", onPress: () => testTextInput(field) },
+                { text: "Cancel", style: "cancel" }
+              ]
             );
           }}
         >
@@ -377,9 +423,15 @@ const SOAPExamination: React.FC<SOAPExaminationProps> = ({
         >
           <View style={styles.header}>
             <Text style={styles.headerTitle}>SOAP Examination</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color={Colors.text} />
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity onPress={testMicrophone} style={styles.micTestButton}>
+                <Mic size={16} color={Colors.primary} />
+                <Text style={styles.micTestText}>Test Mic</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <X size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.patientInfo}>
@@ -641,6 +693,25 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 8,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  micTestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  micTestText: {
+    ...Typography.caption,
+    color: Colors.primary,
+    marginLeft: 4,
+    fontWeight: '500',
   },
   patientInfo: {
     padding: 16,
