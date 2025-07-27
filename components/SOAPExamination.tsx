@@ -2,674 +2,456 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  Modal,
   TextInput,
-  ScrollView,
   TouchableOpacity,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
+  ScrollView,
   Alert,
+  Modal,
+  StyleSheet,
+  SafeAreaView,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Plus, Search, Trash, Mic, StopCircle } from 'lucide-react-native';
-import Colors from '@/constants/colors';
-import Typography from '@/constants/typography';
-import { searchMedications, Drug } from '@/data/drugsDatabase';
-import { voiceRecordingService, VoiceRecordingResult } from '@/app/services/VoiceRecordingService';
+import { Mic, StopCircle, X, Plus, Trash } from 'lucide-react-native';
 
-export interface SOAPExaminationProps {
-  patientId: string;
-  patientName: string;
-  onClose: () => void;
-  onSave: (soapData: SOAPData, prescriptions: PrescriptionItem[]) => void;
-}
+// Import the new voice transcription service
+import { whisperMedicalTranscriptionService, MedicalTranscriptionResult } from '../app/services/WhisperMedicalTranscriptionService';
+import { drugsDatabase, Drug } from '../data/drugsDatabase';
+import Colors from '../constants/colors';
+import Typography from '../constants/typography';
 
+// SOAP data structure
 export interface SOAPData {
-  diagnosis: string;
-  symptoms: string;
-  allergies: string;
-  treatmentPlan: string;
-  additionalNotes: string;
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
 }
 
-export interface PrescriptionItem {
-  id: string;
-  medicationName: string;
-  dosage: string;
-  frequency: string;
-  duration: string;
-  instructions: string;
+interface SOAPExaminationProps {
+  patientName?: string;
+  onSave?: (data: SOAPData) => void;
+  onClose?: () => void;
+  initialData?: Partial<SOAPData>;
 }
 
 const SOAPExamination: React.FC<SOAPExaminationProps> = ({
-  patientId,
-  patientName,
-  onClose,
+  patientName = 'Patient',
   onSave,
+  onClose,
+  initialData,
 }) => {
+  // State management
   const [soapData, setSOAPData] = useState<SOAPData>({
-    diagnosis: '',
-    symptoms: '',
-    allergies: '',
-    treatmentPlan: '',
-    additionalNotes: '',
+    subjective: initialData?.subjective || '',
+    objective: initialData?.objective || '',
+    assessment: initialData?.assessment || '',
+    plan: initialData?.plan || '',
   });
 
-  const [prescriptions, setPrescriptions] = useState<PrescriptionItem[]>([]);
+  const [isVoiceRecording, setIsVoiceRecording] = useState<keyof SOAPData | null>(null);
+  const [medicalResult, setMedicalResult] = useState<MedicalTranscriptionResult | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [showAddMedication, setShowAddMedication] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Drug[]>([]);
-  const [isVoiceRecording, setIsVoiceRecording] = useState<string | null>(null);
-  
-  const [currentPrescription, setCurrentPrescription] = useState<PrescriptionItem>({
-    id: `rx-${Date.now()}`,
-    medicationName: '',
-    dosage: '',
-    frequency: '',
-    duration: '',
-    instructions: '',
-  });
 
-  useEffect(() => {
-    if (searchQuery.length > 1) {
-      setSearchResults(searchMedications(searchQuery));
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchQuery]);
-
+  // Handle text input changes
   const handleInputChange = (field: keyof SOAPData, value: string) => {
-    setSOAPData(prev => ({ ...prev, [field]: value }));
+    setSOAPData(prev => ({
+            ...prev,
+      [field]: value,
+    }));
   };
 
-  const handlePrescriptionChange = (field: keyof PrescriptionItem, value: string) => {
-    setCurrentPrescription(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleAddPrescription = () => {
-    if (!currentPrescription.medicationName) {
-      return;
-    }
-    
-    setPrescriptions([...prescriptions, { ...currentPrescription, id: `rx-${Date.now()}` }]);
-    setCurrentPrescription({
-      id: `rx-${Date.now()}`,
-      medicationName: '',
-      dosage: '',
-      frequency: '',
-      duration: '',
-      instructions: '',
-    });
-    setShowAddMedication(false);
-  };
-
-  const handleRemovePrescription = (id: string) => {
-    setPrescriptions(prescriptions.filter(p => p.id !== id));
-  };
-
-  const handleSelectMedication = (medication: Drug) => {
-    setCurrentPrescription({
-      ...currentPrescription,
-      medicationName: medication.name,
-      dosage: medication.dosageStrengths[0] || '',
-      frequency: medication.commonDosages[0] || '',
-      instructions: `Used for: ${medication.usedFor.join(', ')}`,
-    });
-    setSearchQuery('');
-    setSearchResults([]);
-  };
-
-  const handleSave = () => {
-    onSave(soapData, prescriptions);
-  };
-
+  // Voice recording functions
   const startVoiceRecording = async (field: keyof SOAPData) => {
     try {
-      console.log('🎤 Starting voice recording for field:', field);
+      console.log('🎤 Starting medical voice recording for field:', field);
       
-      // Check if we're on web and provide appropriate feedback
-      if (Platform.OS === 'web') {
-        console.log('🌐 Running on web platform');
+      // Check if already recording
+      if (isVoiceRecording) {
+        console.log('🔄 Stopping previous recording before starting new one...');
+        await stopVoiceRecording(isVoiceRecording, true);
+        await new Promise(resolve => setTimeout(resolve, 300)); // Wait for cleanup
       }
       
       setIsVoiceRecording(field);
-      const success = await voiceRecordingService.startRecording();
       
-      if (!success) {
-        console.error('❌ Failed to start recording');
-        Alert.alert(
-          "Recording Error", 
-          "Failed to start recording. Please check:\n• Microphone permissions\n• Browser microphone access\n• Internet connection",
-          [
-            {
-              text: "Test with Sample Text",
-              onPress: () => {
-                // Add sample text for testing
-                const sampleText = "Sample diagnosis text for testing";
-                const currentText = soapData[field];
-                const newText = currentText ? `${currentText} ${sampleText}` : sampleText;
-                handleInputChange(field, newText);
-                Alert.alert("Test Mode", `Sample text added to ${field}`);
-                setIsVoiceRecording(null);
+      // Use the new medical voice transcription service
+      const success = await whisperMedicalTranscriptionService.startRecording();
+        
+        if (!success) {
+          console.error('❌ Failed to start recording');
+          Alert.alert(
+            "Recording Error", 
+            "Failed to start recording. Please check:\n• Microphone permissions\n• Browser microphone access\n• Internet connection",
+            [
+              {
+                text: "Test with Sample Text",
+                onPress: () => {
+                  // Add sample text for testing
+                const sampleText = "Sample medical text for testing";
+                  const currentText = soapData[field];
+                  const newText = currentText ? `${currentText} ${sampleText}` : sampleText;
+                  handleInputChange(field, newText);
+                  Alert.alert("Test Mode", `Sample text added to ${field}`);
+                  setIsVoiceRecording(null);
+                }
+              },
+              {
+                text: "OK",
+                onPress: () => setIsVoiceRecording(null)
               }
-            },
-            {
-              text: "OK",
-              onPress: () => setIsVoiceRecording(null)
-            }
-          ]
-        );
-        return;
+            ]
+          );
+          return;
       }
 
       console.log('✅ Recording started successfully');
-      Alert.alert(
-        "🎤 Voice Recording Active", 
-        `Recording started for ${field}.\n\n🔴 SPEAK CLEARLY AND LOUDLY\n📱 Hold phone close to your mouth\n⏱️ Speak for at least 2-3 seconds\n🗣️ Example: "Patient has a fever and cough"\n\nTap the microphone again to stop recording.`,
-        [
-          {
-            text: "Cancel Recording",
-            onPress: () => stopVoiceRecording(field, true),
-            style: "cancel"
-          }
-        ]
-      );
+        Alert.alert(
+        "🎤 Recording", 
+        "Speak medical information clearly. Recording will automatically process with medical terminology mapping.",
+          [
+            {
+            text: "Stop Recording",
+            onPress: () => stopVoiceRecording(field)
+            }
+          ]
+        );
     } catch (error) {
       console.error('❌ Error starting voice recording:', error);
-      Alert.alert(
-        "Voice Recording Error", 
-        `Failed to start voice recording: ${error}\n\nWould you like to test with sample text instead?`,
-        [
-          {
-            text: "Add Sample Text",
-            onPress: () => {
-              const sampleText = "Sample text for testing";
-              const currentText = soapData[field];
-              const newText = currentText ? `${currentText} ${sampleText}` : sampleText;
-              handleInputChange(field, newText);
-              Alert.alert("Test Mode", `Sample text added to ${field}`);
-            }
-          },
-          {
-            text: "Cancel",
-            style: "cancel"
-          }
-        ]
-      );
       setIsVoiceRecording(null);
+      Alert.alert("Error", `Failed to start recording: ${error}`);
     }
   };
 
-  const stopVoiceRecording = async (field: keyof SOAPData, cancelled: boolean = false) => {
+  const stopVoiceRecording = async (field: keyof SOAPData, silent: boolean = false) => {
     try {
-      console.log('🛑 Stopping voice recording for field:', field, 'cancelled:', cancelled);
-      
-      // Show processing indicator
-      if (!cancelled) {
-        Alert.alert("🔄 Processing", "Processing your voice recording...\n\nPlease wait...");
-      }
-      
-      let result: VoiceRecordingResult;
-      
-      if (cancelled) {
-        console.log('🚫 Cancelling recording...');
-        await voiceRecordingService.cancelRecording();
-        result = { success: false, error: 'Recording cancelled' };
-      } else {
-        console.log('🔄 Processing recording...');
-        result = await voiceRecordingService.stopRecording();
+      if (!isVoiceRecording && !silent) {
+        Alert.alert("No Recording", "No recording in progress");
+        return;
       }
 
+      console.log('🛑 Stopping voice recording...');
       setIsVoiceRecording(null);
+      setIsProcessing(true);
 
-      console.log('📝 Transcription result:', result);
-
-      if (result.success && result.text) {
-        // Append the transcribed text to the existing field content
-        const currentText = soapData[field];
-        const newText = currentText ? `${currentText} ${result.text}` : result.text;
-        console.log('✨ Adding transcribed text to field:', field, 'Text:', result.text);
+      if (!silent) {
+        console.log('🔄 Processing recording with medical terminology...');
+            
+        // Use the new medical transcription service
+        const result = await whisperMedicalTranscriptionService.stopRecordingWithMedicalProcessing();
+            
+        setMedicalResult(result);
         
-        // Update the field
-        handleInputChange(field, newText);
-        
-        // Show success message with the transcribed text
-        Alert.alert(
-          "✅ Voice Recording Complete!", 
-          `Your speech has been successfully transcribed and added to ${field}:\n\n"${result.text}"\n\nThe text has been automatically added to the ${field} field.`,
-          [
-            {
-              text: "Great!",
-              style: "default"
-            }
-          ]
-        );
-      } else if (result.error && !cancelled) {
-        console.error('❌ Recording failed:', result.error);
-        
-        // Special handling for "Thank you" transcription issue
-        const isThankYouIssue = result.error.includes('Thank you');
-        
-        Alert.alert(
-          isThankYouIssue ? "🔧 Microphone Issue Detected" : "Recording Failed", 
-          isThankYouIssue 
-            ? `The system keeps hearing "Thank you" instead of your speech. This usually means:\n\n🔇 Microphone too quiet/far away\n🎤 Browser audio issues\n🌐 Need better microphone setup\n\n${result.error}`
-            : `${result.error}`,
-          [
-            ...(isThankYouIssue ? [{
-              text: "🧪 Test Microphone",
-              onPress: testMicrophone
-            }] : []),
-            {
-              text: "🔄 Try Again",
-              onPress: () => startVoiceRecording(field)
-            },
-            {
-              text: "📝 Type Instead",
-              onPress: () => {
+        if (result.success && result.originalText) {
+          // Use medical summary if available, otherwise use original text
+          const finalText = result.medicalSummary || result.normalizedText || result.originalText;
+          
+          // Add the transcribed text to the field
+          const currentText = soapData[field];
+          const newText = currentText ? `${currentText} ${finalText}` : finalText;
+          handleInputChange(field, newText);
+              
+          // Show medical information if available
+          if (result.medicalTerms && result.medicalTerms.length > 0) {
+                setTimeout(() => {
+                  Alert.alert(
+                "🏥 Medical Analysis Complete", 
+                `✅ Transcribed: "${result.originalText}"\n\n🏥 Medical Summary: ${result.medicalSummary}\n\n📋 Found ${result.medicalTerms?.length || 0} medical terms\n🏷️ Categories: ${result.medicalCategories?.join(', ') || 'None'}\n⏱️ Processing: ${result.totalProcessingTime}ms`,
+                    [{ text: "Great!" }]
+                  );
+                }, 500);
+            } else {
+            // Show basic transcription result
+              setTimeout(() => {
                 Alert.alert(
-                  "Manual Input", 
-                  `Please type your ${field} manually in the text field above.`,
+                "📝 Transcription Complete", 
+                `Text captured: "${result.originalText}"\n\nLanguage: ${result.detectedLanguage}\n\nNo medical terms were detected in this recording.`,
                   [{ text: "OK" }]
                 );
-              }
-            },
-            {
-              text: "Cancel",
-              style: "cancel"
-            }
-          ]
-        );
-      } else if (cancelled) {
-        console.log('✅ Recording cancelled by user');
-        Alert.alert("Recording Cancelled", "Voice recording has been cancelled.");
+              }, 500);
+          }
+            } else {
+          Alert.alert(
+            "Processing Failed", 
+            result.error || "Failed to process recording. Please try again.",
+            [{ text: "OK" }]
+          );
+        }
       }
     } catch (error) {
       console.error('❌ Error stopping voice recording:', error);
-      Alert.alert(
-        "Processing Error", 
-        `Failed to process voice recording: ${error}\n\nPlease try again.`,
-        [
-          {
-            text: "Try Again",
-            onPress: () => startVoiceRecording(field)
-          },
-          {
-            text: "Cancel",
-            style: "cancel"
-          }
-        ]
-      );
-      setIsVoiceRecording(null);
+      Alert.alert("Error", `Failed to stop recording: ${error}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const testTextInput = (field: keyof SOAPData) => {
-    const testTexts = {
-      diagnosis: "Acute upper respiratory infection with mild fever",
-      symptoms: "Cough, sore throat, nasal congestion, low-grade fever",
-      allergies: "No known allergies",
-      treatmentPlan: "Rest, fluids, over-the-counter pain relievers as needed",
-      additionalNotes: "Follow up in 1 week if symptoms persist"
-    };
-    
-    const currentText = soapData[field];
-    const testText = testTexts[field];
-    const newText = currentText ? `${currentText} ${testText}` : testText;
-    
-    handleInputChange(field, newText);
-    console.log('✅ Test text added to field:', field);
-    Alert.alert("Test Successful", `Test text has been added to the ${field} field!`);
-  };
+  // Medication search
+  const searchMedications = (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
 
-  const testMicrophone = async () => {
-    Alert.alert(
-      "🎤 Microphone Test", 
-      "Testing your microphone...",
-      [{ text: "OK" }]
+    const filtered = drugsDatabase.filter(drug =>
+      drug.name.toLowerCase().includes(query.toLowerCase()) ||
+      drug.genericName.toLowerCase().includes(query.toLowerCase()) ||
+      drug.category.toLowerCase().includes(query.toLowerCase())
     );
-    
-    try {
-      const success = await voiceRecordingService.testMicrophone();
-      if (success) {
-        Alert.alert(
-          "✅ Microphone Test Successful!", 
-          "Your microphone is working properly. If you're still getting 'Thank you', try:\n\n• Speaking LOUDER and more clearly\n• Getting closer to your microphone\n• Using headphones with a microphone\n• Testing in a quieter environment",
-          [{ text: "Got it!" }]
-        );
-      } else {
-        Alert.alert(
-          "❌ Microphone Test Failed", 
-          "There's an issue with your microphone. Please:\n\n• Check browser permissions\n• Allow microphone access\n• Try refreshing the page\n• Use a different browser",
-          [{ text: "OK" }]
-        );
-      }
-    } catch (error) {
-      Alert.alert(
-        "❌ Test Error", 
-        `Microphone test failed: ${error}`,
-        [{ text: "OK" }]
-      );
-    }
+
+    setSearchResults(filtered.slice(0, 10)); // Limit to 10 results
   };
 
+  const selectMedication = (drug: Drug) => {
+    const medicationText = `${drug.name} (${drug.genericName}) - ${drug.category} - Dosage: ${drug.commonDosages[0] || 'As prescribed'} - Frequency: ${drug.commonDosages.length > 1 ? drug.commonDosages[1] : 'As needed'} - Instructions: See ${drug.interactions.length > 0 ? 'interactions' : 'standard protocols'}`;
+    const currentText = soapData.plan;
+    const newText = currentText ? `${currentText}\n${medicationText}` : medicationText;
+    handleInputChange('plan', newText);
+    setShowAddMedication(false);
+  };
+
+  // Handle save
+  const handleSave = () => {
+    // Validate that at least one field has content
+    const hasContent = Object.values(soapData).some(value => value.trim().length > 0);
+    
+    if (!hasContent) {
+        Alert.alert(
+        "Incomplete SOAP Note",
+        "Please add content to at least one field before saving.",
+                  [{ text: "OK" }]
+                );
+      return;
+    }
+
+    console.log('💾 Saving SOAP data:', soapData);
+    
+    if (onSave) {
+      onSave(soapData);
+    }
+    
+      Alert.alert(
+      "SOAP Note Saved",
+      "Your SOAP examination has been saved successfully.",
+      [
+        {
+          text: "Continue Editing",
+          style: "cancel"
+        },
+        {
+          text: "Close",
+          onPress: onClose
+        }
+      ]
+        );
+  };
+
+  // Render voice recording button
   const renderVoiceButton = (field: keyof SOAPData) => {
-    const isRecordingThisField = isVoiceRecording === field;
+    const isRecording = isVoiceRecording === field;
+    const isCurrentlyProcessing = isProcessing && isVoiceRecording === field;
     
     return (
-      <View style={styles.voiceButtonContainer}>
         <TouchableOpacity 
           style={[
             styles.voiceButton,
-            isRecordingThisField && styles.voiceButtonRecording
+          isRecording && styles.voiceButtonActive,
+          isCurrentlyProcessing && styles.voiceButtonDisabled,
           ]}
-          onPress={() => {
-            if (isRecordingThisField) {
-              stopVoiceRecording(field);
-            } else if (!isVoiceRecording) {
-              startVoiceRecording(field);
-            }
-          }}
-          disabled={isVoiceRecording !== null && !isRecordingThisField}
+        onPress={() => isRecording ? stopVoiceRecording(field) : startVoiceRecording(field)}
+        disabled={isCurrentlyProcessing}
         >
-          {isRecordingThisField ? (
-            <StopCircle 
-              size={20} 
-              color={Colors.danger}
-            />
+        {isRecording ? (
+          <StopCircle size={20} color={Colors.primary} />
           ) : (
-            <Mic 
-              size={20} 
-              color={isVoiceRecording ? Colors.textSecondary : Colors.primary} 
-            />
+          <Mic size={20} color={isProcessing ? Colors.textSecondary : Colors.primary} />
           )}
+        <Text style={[styles.voiceButtonText, isRecording && styles.voiceButtonTextActive]}>
+          {isRecording ? 'Stop' : 'Voice'}
+        </Text>
         </TouchableOpacity>
-        
-        {/* Add helper buttons for debugging and testing */}
-        <TouchableOpacity 
-          style={styles.testButton}
-          onPress={() => testTextInput(field)}
-          onLongPress={() => {
-            Alert.alert(
-              "Test Options", 
-              "• Tap: Add sample text\n• Long press + Hold: Test microphone",
-              [
-                { text: "Test Microphone", onPress: testMicrophone },
-                { text: "Add Sample Text", onPress: () => testTextInput(field) },
-                { text: "Cancel", style: "cancel" }
-              ]
-            );
-          }}
-        >
-          <Text style={styles.testButtonText}>T</Text>
-        </TouchableOpacity>
-      </View>
     );
   };
 
+  // Render SOAP field
+  const renderSOAPField = (field: keyof SOAPData, label: string, placeholder: string) => (
+    <View style={styles.fieldContainer}>
+      <View style={styles.fieldHeader}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {renderVoiceButton(field)}
+          </View>
+
+      {isVoiceRecording === field && (
+        <View style={styles.recordingIndicator}>
+          <ActivityIndicator size="small" color={Colors.danger} />
+          <Text style={styles.recordingText}>Recording... Speak clearly</Text>
+          </View>
+      )}
+      
+      {isProcessing && isVoiceRecording === field && (
+        <View style={styles.processingIndicator}>
+          <ActivityIndicator size="small" color={Colors.background} />
+          <Text style={styles.processingText}>Processing medical terminology...</Text>
+              </View>
+      )}
+
+                <TextInput
+        style={styles.textInput}
+        value={soapData[field]}
+        onChangeText={(text) => handleInputChange(field, text)}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.textSecondary}
+                  multiline
+        numberOfLines={6}
+        textAlignVertical="top"
+                />
+              </View>
+  );
+
   return (
-    <Modal
-      visible={true}
-      animationType="slide"
-      transparent={false}
-      onRequestClose={onClose}
-    >
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.container}
-        >
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>SOAP Examination</Text>
-            <View style={styles.headerButtons}>
-              <TouchableOpacity onPress={testMicrophone} style={styles.micTestButton}>
-                <Mic size={16} color={Colors.primary} />
-                <Text style={styles.micTestText}>Test Mic</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <X size={24} color={Colors.text} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.patientInfo}>
-            <Text style={styles.patientName}>{patientName}</Text>
-            <Text style={styles.patientId}>ID: {patientId}</Text>
-          </View>
-
-          <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Diagnosis</Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter diagnosis"
-                  value={soapData.diagnosis}
-                  onChangeText={(text) => handleInputChange('diagnosis', text)}
-                  multiline
-                />
-                {renderVoiceButton('diagnosis')}
-              </View>
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>SOAP Examination</Text>
+        <Text style={styles.patientName}>{patientName}</Text>
+        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <X size={24} color={Colors.textSecondary} />
+        </TouchableOpacity>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Symptoms</Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter symptoms"
-                  value={soapData.symptoms}
-                  onChangeText={(text) => handleInputChange('symptoms', text)}
-                  multiline
-                />
-                {renderVoiceButton('symptoms')}
-              </View>
-            </View>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Subjective */}
+        {renderSOAPField('subjective', 'Subjective', 'Patient\'s chief complaint, history of present illness, review of systems...')}
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Allergies</Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter allergies"
-                  value={soapData.allergies}
-                  onChangeText={(text) => handleInputChange('allergies', text)}
-                  multiline
-                />
-                {renderVoiceButton('allergies')}
-              </View>
-            </View>
+        {/* Objective */}
+        {renderSOAPField('objective', 'Objective', 'Vital signs, physical examination findings, diagnostic results...')}
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Treatment Plan</Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter treatment plan"
-                  value={soapData.treatmentPlan}
-                  onChangeText={(text) => handleInputChange('treatmentPlan', text)}
-                  multiline
-                />
-                {renderVoiceButton('treatmentPlan')}
-              </View>
-            </View>
+        {/* Assessment */}
+        {renderSOAPField('assessment', 'Assessment', 'Clinical impression, differential diagnosis, problem list...')}
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Additional Notes</Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter additional notes"
-                  value={soapData.additionalNotes}
-                  onChangeText={(text) => handleInputChange('additionalNotes', text)}
-                  multiline
-                />
-                {renderVoiceButton('additionalNotes')}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <View style={styles.prescriptionHeader}>
-                <Text style={styles.sectionTitle}>Prescriptions</Text>
+        {/* Plan */}
+        <View style={styles.fieldContainer}>
+          <View style={styles.fieldHeader}>
+            <Text style={styles.fieldLabel}>Plan</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <TouchableOpacity 
                   style={styles.addButton}
                   onPress={() => setShowAddMedication(true)}
                 >
-                  <Plus size={20} color={Colors.background} />
+                <Plus size={20} color={Colors.primary} />
                   <Text style={styles.addButtonText}>Add Medication</Text>
                 </TouchableOpacity>
+              {renderVoiceButton('plan')}
+            </View>
               </View>
 
-              {prescriptions.length > 0 ? (
-                <View style={styles.prescriptionList}>
-                  {prescriptions.map((prescription) => (
-                    <View key={prescription.id} style={styles.prescriptionItem}>
-                      <View style={styles.prescriptionContent}>
-                        <Text style={styles.prescriptionName}>{prescription.medicationName}</Text>
-                        <Text style={styles.prescriptionDetails}>
-                          {prescription.dosage}, {prescription.frequency}, {prescription.duration}
+          {isVoiceRecording === 'plan' && (
+            <View style={styles.recordingIndicator}>
+              <ActivityIndicator size="small" color={Colors.danger} />
+              <Text style={styles.recordingText}>Recording... Speak clearly</Text>
+            </View>
+          )}
+
+          <TextInput
+            style={styles.textInput}
+            value={soapData.plan}
+            onChangeText={(text) => handleInputChange('plan', text)}
+            placeholder="Treatment plan, medications, follow-up instructions, patient education..."
+            placeholderTextColor={Colors.textSecondary}
+            multiline
+            numberOfLines={6}
+            textAlignVertical="top"
+          />
+        </View>
+
+        {/* Medical Results Display */}
+        {medicalResult && medicalResult.success && (
+          <View style={styles.medicalResultContainer}>
+            <Text style={styles.medicalResultTitle}>Latest Medical Analysis</Text>
+            <Text style={styles.medicalResultText}>
+              📝 Original: "{medicalResult.originalText}"
                         </Text>
-                        <Text style={styles.prescriptionInstructions}>
-                          {prescription.instructions}
+            {medicalResult.medicalSummary && (
+              <Text style={styles.medicalResultText}>
+                🏥 Medical Summary: {medicalResult.medicalSummary}
                         </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.removeButton}
-                        onPress={() => handleRemovePrescription(prescription.id)}
-                      >
-                        <Trash size={20} color={Colors.danger} />
-                      </TouchableOpacity>
+            )}
+            {medicalResult.medicalTerms && medicalResult.medicalTerms.length > 0 && (
+              <View style={styles.medicalTermsSection}>
+                <Text style={styles.medicalTermsTitle}>
+                  Medical Terms ({medicalResult.medicalTerms.length})
+                </Text>
+                <View style={styles.medicalTermsList}>
+                  {medicalResult.medicalTerms.slice(0, 10).map((term, index) => (
+                    <View key={index} style={styles.medicalTerm}>
+                      <Text style={styles.medicalTermText}>{term.term}</Text>
                     </View>
                   ))}
                 </View>
-              ) : (
-                <Text style={styles.emptyText}>No medications added</Text>
+              </View>
               )}
             </View>
+        )}
+      </ScrollView>
 
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity 
-                style={[styles.button, styles.cancelButton]}
-                onPress={onClose}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+      {/* Save Button */}
+      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+        <Text style={styles.saveButtonText}>Save SOAP Note</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.button, styles.saveButton]}
-                onPress={handleSave}
-              >
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
 
-          {/* Add Medication Modal */}
+      {/* Medication Modal */}
           <Modal
             visible={showAddMedication}
             animationType="slide"
             transparent={true}
             onRequestClose={() => setShowAddMedication(false)}
           >
-            <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modal}>
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Add Medication</Text>
                   <TouchableOpacity
-                    onPress={() => setShowAddMedication(false)}
                     style={styles.modalCloseButton}
+                onPress={() => setShowAddMedication(false)}
                   >
-                    <X size={24} color={Colors.text} />
+                <X size={20} color={Colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.searchContainer}>
-                  <Search size={20} color={Colors.textSecondary} style={styles.searchIcon} />
                   <TextInput
                     style={styles.searchInput}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
                     placeholder="Search medications..."
                     placeholderTextColor={Colors.textSecondary}
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                searchMedications(text);
+              }}
                   />
-                </View>
 
-                {searchResults.length > 0 && (
                   <FlatList
                     data={searchResults}
+              style={styles.medicationList}
                     keyExtractor={(item) => item.id}
-                    style={styles.searchResults}
                     renderItem={({ item }) => (
                       <TouchableOpacity
-                        style={styles.searchResultItem}
-                        onPress={() => handleSelectMedication(item)}
+                  style={styles.medicationListItem}
+                  onPress={() => selectMedication(item)}
                       >
-                        <Text style={styles.searchResultName}>{item.name}</Text>
-                        <Text style={styles.searchResultDetails}>
-                          {item.genericName} - {item.category}
+                  <Text style={styles.medicationListName}>{item.name}</Text>
+                  <Text style={styles.medicationListGeneric}>
+                    {item.genericName} • {item.category}
                         </Text>
                       </TouchableOpacity>
                     )}
                   />
-                )}
-
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="Medication Name"
-                  value={currentPrescription.medicationName}
-                  onChangeText={(text) => handlePrescriptionChange('medicationName', text)}
-                />
-
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="Dosage (e.g., 10mg)"
-                  value={currentPrescription.dosage}
-                  onChangeText={(text) => handlePrescriptionChange('dosage', text)}
-                />
-
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="Frequency (e.g., Once daily)"
-                  value={currentPrescription.frequency}
-                  onChangeText={(text) => handlePrescriptionChange('frequency', text)}
-                />
-
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="Duration (e.g., 7 days)"
-                  value={currentPrescription.duration}
-                  onChangeText={(text) => handlePrescriptionChange('duration', text)}
-                />
-
-                <TextInput
-                  style={[styles.modalInput, styles.instructionsInput]}
-                  placeholder="Instructions"
-                  value={currentPrescription.instructions}
-                  onChangeText={(text) => handlePrescriptionChange('instructions', text)}
-                  multiline
-                />
-
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.cancelModalButton]}
-                    onPress={() => setShowAddMedication(false)}
-                  >
-                    <Text style={styles.cancelModalButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.addModalButton]}
-                    onPress={handleAddPrescription}
-                  >
-                    <Text style={styles.addModalButtonText}>Add</Text>
-                  </TouchableOpacity>
                 </View>
-              </View>
-            </View>
-          </Modal>
-        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
+    </SafeAreaView>
   );
 };
 
@@ -682,115 +464,114 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    backgroundColor: Colors.card,
   },
   headerTitle: {
-    ...Typography.h3,
+    ...Typography.h2,
     color: Colors.text,
+    flex: 1,
+  },
+  patientName: {
+    ...Typography.body,
+    color: Colors.textSecondary,
+    flex: 1,
+    textAlign: 'center',
   },
   closeButton: {
     padding: 8,
   },
-  headerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  micTestButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  micTestText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  patientInfo: {
-    padding: 16,
-    backgroundColor: Colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  patientName: {
-    ...Typography.h4,
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  patientId: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-  },
   content: {
     flex: 1,
+    padding: 20,
   },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 32,
+  fieldContainer: {
+    marginBottom: 24,
   },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    ...Typography.h5,
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    backgroundColor: Colors.card,
-  },
-  input: {
-    ...Typography.body,
-    flex: 1,
-    padding: 12,
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  voiceButtonContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  voiceButton: {
-    padding: 12,
-    alignSelf: 'flex-start',
-  },
-  voiceButtonRecording: {
-    backgroundColor: Colors.card,
-    borderRadius: 6,
-  },
-  testButton: {
-    padding: 4,
-    alignSelf: 'flex-start',
-  },
-  testButtonText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-  },
-  prescriptionHeader: {
+  fieldHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  addButton: {
+  fieldLabel: {
+    ...Typography.label,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  voiceButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  voiceButtonActive: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
+  },
+  voiceButtonDisabled: {
+    opacity: 0.5,
+    borderColor: Colors.border,
+  },
+  voiceButtonText: {
+    ...Typography.caption,
+    color: Colors.primary,
+    marginLeft: 6,
+  },
+  voiceButtonTextActive: {
+    color: Colors.primary,
+  },
+  textInput: {
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    lineHeight: 24,
+    textAlignVertical: 'top',
+    backgroundColor: Colors.card,
+    color: Colors.text,
+  },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dangerLight,
+    padding: 12,
     borderRadius: 8,
+    marginBottom: 12,
+  },
+  recordingText: {
+    ...Typography.caption,
+    color: Colors.danger,
+    marginLeft: 8,
+  },
+  processingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.warning,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  processingText: {
+    ...Typography.caption,
+    color: Colors.background,
+    marginLeft: 8,
+  },
+  addButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
   },
   addButtonText: {
     ...Typography.caption,
@@ -798,182 +579,121 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 4,
   },
-  prescriptionList: {
-    marginTop: 8,
-  },
-  prescriptionItem: {
-    flexDirection: 'row',
+  medicalResultContainer: {
     backgroundColor: Colors.card,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  prescriptionContent: {
-    flex: 1,
-  },
-  prescriptionName: {
-    ...Typography.body,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  prescriptionDetails: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  prescriptionInstructions: {
-    ...Typography.caption,
-  },
-  removeButton: {
-    padding: 4,
-  },
-  emptyText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    textAlign: 'center',
+    borderRadius: 12,
     padding: 16,
-    backgroundColor: Colors.card,
-    borderRadius: 8,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 24,
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: Colors.card,
-    marginRight: 8,
+    marginTop: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  medicalResultTitle: {
+    ...Typography.h5,
+    color: Colors.primary,
+    marginBottom: 8,
+  },
+  medicalResultText: {
+    ...Typography.body,
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  medicalTermsSection: {
+    marginTop: 12,
+  },
+  medicalTermsTitle: {
+    ...Typography.label,
+    color: Colors.primary,
+    marginBottom: 8,
+  },
+  medicalTermsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  medicalTerm: {
+    backgroundColor: Colors.info,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  medicalTermText: {
+    ...Typography.caption,
+    color: Colors.background,
+    fontSize: 12,
   },
   saveButton: {
     backgroundColor: Colors.primary,
-    marginLeft: 8,
-  },
-  cancelButtonText: {
-    ...Typography.body,
-    color: Colors.text,
-    fontWeight: '600',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 40,
+    marginHorizontal: 20,
   },
   saveButtonText: {
     ...Typography.body,
     color: Colors.background,
     fontWeight: '600',
   },
-  modalContainer: {
+  modal: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    width: '90%',
     backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 16,
-    maxHeight: '90%',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   modalTitle: {
     ...Typography.h4,
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    ...Typography.body,
-    flex: 1,
-    paddingVertical: 12,
     color: Colors.text,
   },
-  searchResults: {
-    maxHeight: 350,
-    marginBottom: 16,
+  modalCloseButton: {
+    backgroundColor: Colors.border,
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchInput: {
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 8,
-  },
-  searchResultItem: {
     padding: 12,
+    marginBottom: 16,
+    fontSize: 16,
+    backgroundColor: Colors.card,
+    color: Colors.text,
+  },
+  medicationList: {
+    maxHeight: 300,
+  },
+  medicationListItem: {
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  searchResultName: {
-    ...Typography.body,
-    fontWeight: '500',
-  },
-  searchResultDetails: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-  },
-  modalInput: {
-    ...Typography.body,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    backgroundColor: Colors.card,
-  },
-  instructionsInput: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelModalButton: {
-    backgroundColor: Colors.card,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  addModalButton: {
-    backgroundColor: Colors.primary,
-    marginLeft: 8,
-  },
-  cancelModalButtonText: {
+  medicationListName: {
     ...Typography.body,
     color: Colors.text,
     fontWeight: '600',
+    marginBottom: 4,
   },
-  addModalButtonText: {
-    ...Typography.body,
-    color: Colors.background,
-    fontWeight: '600',
+  medicationListGeneric: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
   },
 });
 

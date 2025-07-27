@@ -1,6 +1,13 @@
 import { useState, useCallback } from 'react';
 import { Alert } from 'react-native';
-import { voiceRecordingService, VoiceRecordingResult } from '../services/VoiceRecordingService';
+import { whisperMedicalTranscriptionService, MedicalTranscriptionResult } from '../services/WhisperMedicalTranscriptionService';
+
+interface VoiceRecordingResult {
+  success: boolean;
+  text?: string;
+  error?: string;
+  medicalResult?: MedicalTranscriptionResult;
+}
 
 interface VoiceRecordingHook {
   isRecording: boolean;
@@ -17,61 +24,82 @@ export const useVoiceRecording = (): VoiceRecordingHook => {
   const startRecording = useCallback(async (): Promise<boolean> => {
     try {
       setIsRecording(true);
-      const success = await voiceRecordingService.startRecording();
+      console.log('🎤 Hook: Starting medical voice recording...');
+      
+      const success = await whisperMedicalTranscriptionService.startRecording();
       
       if (!success) {
         setIsRecording(false);
         Alert.alert(
-          "Recording Error", 
-          "Failed to start recording. Please check microphone permissions."
+          "Microphone Access Required", 
+          "Unable to access your microphone. Please:\n\n• Grant microphone permissions in your browser\n• Check if another app is using your microphone\n• Try refreshing the page\n\nClick the microphone icon in your browser's address bar to manage permissions.",
+          [
+            { text: "Help", onPress: () => console.log('TODO: Show microphone help guide') },
+            { text: "Try Again", onPress: () => {} }
+          ]
         );
         return false;
       }
       
+      console.log('✅ Hook: Recording started successfully');
       return true;
     } catch (error) {
-      console.error('Error starting voice recording:', error);
+      console.error('❌ Hook: Error starting voice recording:', error);
       setIsRecording(false);
-      Alert.alert("Error", "Failed to start voice recording.");
+      Alert.alert(
+        "Recording Error",
+        `Failed to start recording: ${error}`,
+        [{ text: "OK" }]
+      );
       return false;
     }
   }, []);
 
   const stopRecording = useCallback(async (): Promise<VoiceRecordingResult> => {
     try {
-      setIsRecording(false);
+      console.log('🛑 Hook: Stopping voice recording...');
       setIsProcessing(true);
       
-      const result = await voiceRecordingService.stopRecording();
-      setIsProcessing(false);
+      const medicalResult = await whisperMedicalTranscriptionService.stopRecordingWithMedicalProcessing();
       
-      if (!result.success && result.error) {
-        Alert.alert("Recording Failed", result.error);
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('Error stopping voice recording:', error);
       setIsRecording(false);
-      setIsProcessing(false);
       
-      const errorResult: VoiceRecordingResult = {
+      if (medicalResult.success && medicalResult.originalText) {
+        console.log('✅ Hook: Recording processed successfully');
+        return {
+          success: true,
+          text: medicalResult.medicalSummary || medicalResult.normalizedText || medicalResult.originalText,
+          medicalResult: medicalResult
+        };
+      } else {
+        console.error('❌ Hook: Recording failed:', medicalResult.error);
+        return {
+          success: false,
+          error: medicalResult.error || 'Recording failed',
+          medicalResult: medicalResult
+        };
+      }
+    } catch (error) {
+      console.error('❌ Hook: Error stopping voice recording:', error);
+      setIsRecording(false);
+      return {
         success: false,
-        error: 'Failed to process voice recording'
+        error: `Recording processing failed: ${error}`
       };
-      
-      Alert.alert("Error", errorResult.error || "Unknown error");
-      return errorResult;
+    } finally {
+      setIsProcessing(false);
     }
   }, []);
 
   const cancelRecording = useCallback(async (): Promise<void> => {
     try {
-      await voiceRecordingService.cancelRecording();
+      console.log('🚫 Hook: Cancelling voice recording...');
+      await whisperMedicalTranscriptionService.cleanup();
       setIsRecording(false);
       setIsProcessing(false);
+      console.log('✅ Hook: Recording cancelled');
     } catch (error) {
-      console.error('Error cancelling voice recording:', error);
+      console.error('❌ Hook: Error cancelling voice recording:', error);
       setIsRecording(false);
       setIsProcessing(false);
     }
