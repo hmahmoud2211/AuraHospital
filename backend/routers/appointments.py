@@ -102,10 +102,18 @@ async def get_appointments(
 ):
     query = Appointment.all()
     
-    if patient_id:
-        query = query.filter(patient_id=patient_id)
-    if doctor_id:
-        query = query.filter(doctor_id=doctor_id)
+    # Authorization: Users can only see appointments they're involved in
+    if current_user["role"] == "patient":
+        # Patients can only see their own appointments
+        query = query.filter(patient_id=current_user["id"])
+    elif current_user["role"] == "practitioner" or current_user["role"] == "doctor":
+        # Doctors can only see their own appointments
+        query = query.filter(doctor_id=current_user["id"])
+    else:
+        # For other roles, return empty list (or you can add admin logic here)
+        return []
+    
+    # Additional filters (only applied if user has permission)
     if date:
         query = query.filter(date=date)
     
@@ -126,6 +134,17 @@ async def get_appointment(appointment_id: int, current_user: dict = Depends(get_
     appointment = await Appointment.get_or_none(id=appointment_id).prefetch_related('patient', 'doctor')
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    # Authorization: Users can only access appointments they're involved in
+    if current_user["role"] == "patient":
+        if appointment.patient_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied. You can only view your own appointments.")
+    elif current_user["role"] == "practitioner" or current_user["role"] == "doctor":
+        if appointment.doctor_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied. You can only view your own appointments.")
+    else:
+        raise HTTPException(status_code=403, detail="Access denied.")
+    
     result = await Appointment_Pydantic.from_tortoise_orm(appointment)
     doctor_details = await Practitioner_Pydantic.from_tortoise_orm(await appointment.doctor)
     patient_details = await Patient_Pydantic.from_tortoise_orm(await appointment.patient)
@@ -143,6 +162,16 @@ async def update_appointment(
     appointment = await Appointment.get_or_none(id=appointment_id)
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    # Authorization: Users can only update appointments they're involved in
+    if current_user["role"] == "patient":
+        if appointment.patient_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied. You can only update your own appointments.")
+    elif current_user["role"] == "practitioner" or current_user["role"] == "doctor":
+        if appointment.doctor_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied. You can only update your own appointments.")
+    else:
+        raise HTTPException(status_code=403, detail="Access denied.")
     
     # Check if the new time slot is available (if date or time is being changed)
     if appointment_update.date != appointment.date or appointment_update.time != appointment.time:
@@ -179,6 +208,16 @@ async def delete_appointment(appointment_id: int, current_user: dict = Depends(g
     appointment = await Appointment.get_or_none(id=appointment_id)
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    # Authorization: Users can only delete appointments they're involved in
+    if current_user["role"] == "patient":
+        if appointment.patient_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied. You can only delete your own appointments.")
+    elif current_user["role"] == "practitioner" or current_user["role"] == "doctor":
+        if appointment.doctor_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied. You can only delete your own appointments.")
+    else:
+        raise HTTPException(status_code=403, detail="Access denied.")
     
     await appointment.delete()
     return {"message": "Appointment deleted successfully"} 

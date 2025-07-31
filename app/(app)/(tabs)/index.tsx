@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Dimensions } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, Calendar, MessageSquare, FileText, Pill, UserIcon, AlertTriangle, Phone } from 'lucide-react-native';
@@ -52,7 +52,21 @@ export default function HomeScreen() {
   const { currentPatient, vitalSigns, setCurrentPatient } = usePatientStore();
   const { upcomingAppointments, fetchAppointments } = useAppointmentStore();
   const [emergencyAlert, setEmergencyAlert] = useState<string | null>(null);
-
+  const [currentPage, setCurrentPage] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const { width: screenWidth } = Dimensions.get('window');
+  
+  // Responsive card configuration
+  const getCardsPerView = () => {
+    if (screenWidth >= 1024) return 3; // Desktop
+    if (screenWidth >= 768) return 2;  // Tablet
+    return 1; // Mobile
+  };
+  
+  const cardsPerView = getCardsPerView();
+  const cardWidth = (screenWidth - 48 - (cardsPerView - 1) * 16) / cardsPerView; // Account for padding and spacing
+  const cardSpacing = 16;
+  
   // Redirect pharmacists to pharmacy management dashboard
   useEffect(() => {
     if (user?.role === 'pharmacist') {
@@ -141,12 +155,158 @@ export default function HomeScreen() {
     );
   };
 
+  const renderPaginationDots = (totalItems: number) => {
+    const totalPages = Math.ceil(totalItems / cardsPerView);
+    if (totalPages <= 1) return null;
+    
+    return (
+      <View style={styles.paginationContainer}>
+        {Array.from({ length: totalPages }, (_, index) => (
+          <TouchableOpacity
+            key={index}
+            onPress={() => scrollToPage(index)}
+            style={styles.paginationDotContainer}
+          >
+            <View
+              style={[
+                styles.paginationDot,
+                index === currentPage && styles.paginationDotActive
+              ]}
+            />
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
+  const handleScroll = (event: any) => {
+    const contentOffset = event.nativeEvent.contentOffset.x;
+    const page = Math.round(contentOffset / (cardWidth + cardSpacing));
+    setCurrentPage(page);
+  };
+
+  const scrollToPage = (page: number) => {
+    const offset = page * (cardWidth + cardSpacing);
+    scrollViewRef.current?.scrollTo({ x: offset, animated: true });
+  };
+
+  const renderAppointmentCard = (appointment: any, showPatient: boolean = false) => {
+    const formatDate = (dateString: string) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    };
+
+    const formatTime = (timeString: string) => {
+      const [hours, minutes] = timeString.split(':').map(Number);
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const formattedHours = hours % 12 || 12;
+      return `${formattedHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+    };
+
+    const getStatusColor = () => {
+      switch (appointment.status) {
+        case 'confirmed':
+          return ExtendedColors.primary || '#007BFF';
+        case 'completed':
+          return ExtendedColors.success || '#28a745';
+        case 'cancelled':
+          return ExtendedColors.danger || '#dc3545';
+        case 'no-show':
+          return ExtendedColors.warning || '#ffc107';
+        default:
+          return ExtendedColors.info || '#17a2b8';
+      }
+    };
+
+    const getStatusBackground = () => {
+      switch (appointment.status) {
+        case 'confirmed':
+          return ExtendedColors.primaryLight || '#E3F2FD';
+        case 'completed':
+          return '#E8F5E9';
+        case 'cancelled':
+          return '#FFEBEE';
+        case 'no-show':
+          return '#FFF3E0';
+        default:
+          return '#F3F4F6';
+      }
+    };
+
+    const patientName = (() => {
+      const patientDetails = appointment.patientDetails;
+      if (!patientDetails?.name) return 'Unknown Patient';
+      
+      if (Array.isArray(patientDetails.name)) {
+        return patientDetails.name[0]?.text || 'Unknown Patient';
+      }
+      
+      if (typeof patientDetails.name === 'object') {
+        return patientDetails.name?.text || 'Unknown Patient';
+      }
+      
+      return patientDetails.name || 'Unknown Patient';
+    })();
+
+    const doctorName = appointment.doctor?.name || 'Dr. Smith';
+
+    const isUrgent = appointment.reason?.toLowerCase().includes('urgent') || 
+                    appointment.reason?.toLowerCase().includes('emergency');
+
+    return (
+      <TouchableOpacity 
+        style={[
+          styles.enhancedAppointmentCard,
+          isUrgent && styles.urgentCard
+        ]}
+        onPress={() => router.push(`/appointments/${appointment.id}`)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.statusContainer}>
+            <View style={[styles.statusIndicator, { backgroundColor: getStatusColor() }]} />
+            <Text style={styles.cardStatus}>
+              {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+            </Text>
+          </View>
+          {isUrgent && (
+            <View style={styles.urgentBadge}>
+              <Text style={styles.urgentText}>URGENT</Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.cardContent}>
+          <View style={styles.cardInfoRow}>
+            <Calendar size={16} color={ExtendedColors.textSecondary || '#6c757d'} />
+            <Text style={styles.cardInfoText}>
+              {formatDate(appointment.date)} • {formatTime(appointment.time)}
+            </Text>
+          </View>
+          
+          <View style={styles.cardInfoRow}>
+            <UserIcon size={16} color={ExtendedColors.textSecondary || '#6c757d'} />
+            <Text style={styles.cardInfoText}>
+              {showPatient ? `Dr. ${doctorName}` : patientName}
+            </Text>
+          </View>
+          
+          <View style={styles.reasonContainer}>
+            <Text style={styles.reasonLabel}>Reason for Visit</Text>
+            <Text style={styles.reasonText} numberOfLines={3}>
+              {appointment.reason}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderPatientDashboard = () => {
     console.log('Rendering Patient Dashboard');
     return (
       <>
         {renderEmergencyBanner()}
-        
         <View style={styles.welcomeSection}>
           <View>
             <Text style={styles.welcomeText}>Hello,</Text>
@@ -156,78 +316,8 @@ export default function HomeScreen() {
             <Bell size={24} color={ExtendedColors.text || '#000000'} />
           </TouchableOpacity>
         </View>
-
-        <View style={styles.criticalCareSection}>
-          <Text style={styles.sectionTitle}>Critical Care Monitoring</Text>
-          <View style={styles.criticalCareContainer}>
-            <View style={styles.criticalCareItem}>
-              <Text style={styles.criticalCareLabel}>Heart Rate Status</Text>
-              <Text style={[
-                styles.criticalCareValue,
-                currentVitals.heartRate > 100 || currentVitals.heartRate < 60 ? styles.critical : styles.normal
-              ]}>
-                {currentVitals.heartRate > 100 || currentVitals.heartRate < 60 ? 'CRITICAL' : 'NORMAL'}
-              </Text>
-            </View>
-            <View style={styles.criticalCareItem}>
-              <Text style={styles.criticalCareLabel}>Blood Pressure Status</Text>
-              <Text style={[
-                styles.criticalCareValue,
-                currentVitals.bloodPressure.systolic > 180 || currentVitals.bloodPressure.diastolic > 120 ? styles.critical : styles.normal
-              ]}>
-                {currentVitals.bloodPressure.systolic > 180 || currentVitals.bloodPressure.diastolic > 120 ? 'CRITICAL' : 'NORMAL'}
-              </Text>
-            </View>
-            <View style={styles.criticalCareItem}>
-              <Text style={styles.criticalCareLabel}>Glucose Status</Text>
-              <Text style={[
-                styles.criticalCareValue,
-                currentVitals.glucose > 250 || currentVitals.glucose < 70 ? styles.critical : styles.normal
-              ]}>
-                {currentVitals.glucose > 250 || currentVitals.glucose < 70 ? 'CRITICAL' : 'NORMAL'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.quickActionsSection}>
-          <Link href="/(app)/(tabs)/appointments" asChild>
-            <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIconContainer, { backgroundColor: ExtendedColors.primaryLight || '#E0F7FA' }]}>
-                <Calendar size={24} color={ExtendedColors.primary || '#007BFF'} />
-              </View>
-              <Text style={styles.actionText}>Appointments</Text>
-            </TouchableOpacity>
-          </Link>
-          
-          <Link href="/(app)/(tabs)/chat" asChild>
-            <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIconContainer, { backgroundColor: '#E3F2FD' }]}>
-                <MessageSquare size={24} color={ExtendedColors.info || '#2196F3'} />
-              </View>
-              <Text style={styles.actionText}>Chat with AI</Text>
-            </TouchableOpacity>
-          </Link>
-          
-          <Link href="/(app)/(tabs)/records" asChild>
-            <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIconContainer, { backgroundColor: '#E8F5E9' }]}>
-                <FileText size={24} color={ExtendedColors.success || '#008000'} />
-              </View>
-              <Text style={styles.actionText}>Upload Docs</Text>
-            </TouchableOpacity>
-          </Link>
-          
-          <Link href="/(app)/(tabs)/pharmacy" asChild>
-            <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIconContainer, { backgroundColor: '#FFF3E0' }]}>
-                <Pill size={24} color="#FF9800" />
-              </View>
-              <Text style={styles.actionText}>Pharmacy</Text>
-            </TouchableOpacity>
-          </Link>
-        </View>
-
+        
+        {/* Enhanced Upcoming Appointments with responsive pagination */}
         <View style={styles.upcomingAppointmentsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
@@ -237,9 +327,28 @@ export default function HomeScreen() {
           </View>
           
           {upcomingAppointments.length > 0 ? (
-            upcomingAppointments.slice(0, 2).map((appointment) => (
-              <AppointmentCard key={appointment.id} appointment={appointment} />
-            ))
+            <>
+              <ScrollView
+                ref={scrollViewRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.enhancedCardsScrollView}
+                contentContainerStyle={styles.enhancedCardsContainer}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+                pagingEnabled={false}
+                decelerationRate="fast"
+                snapToInterval={cardWidth + cardSpacing}
+                snapToAlignment="start"
+              >
+                {upcomingAppointments.map((appointment) => (
+                  <View key={appointment.id} style={[styles.enhancedCardWrapper, { width: cardWidth }]}>
+                    {renderAppointmentCard(appointment, false)}
+                  </View>
+                ))}
+              </ScrollView>
+              {renderPaginationDots(upcomingAppointments.length)}
+            </>
           ) : (
             <View style={styles.noAppointmentsContainer}>
               <Text style={styles.noAppointmentsText}>No upcoming appointments</Text>
@@ -252,6 +361,42 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+        
+        {/* Quick Actions remain unchanged */}
+        <View style={styles.quickActionsSection}>
+          <Link href="/(app)/(tabs)/appointments" asChild>
+            <TouchableOpacity style={styles.actionCard}>
+              <View style={[styles.actionIconContainer, { backgroundColor: ExtendedColors.primaryLight || '#E0F7FA' }]}> 
+                <Calendar size={24} color={ExtendedColors.primary || '#007BFF'} />
+              </View>
+              <Text style={styles.actionText}>Appointments</Text>
+            </TouchableOpacity>
+          </Link>
+          <Link href="/(app)/(tabs)/chat" asChild>
+            <TouchableOpacity style={styles.actionCard}>
+              <View style={[styles.actionIconContainer, { backgroundColor: '#E3F2FD' }]}> 
+                <MessageSquare size={24} color={ExtendedColors.info || '#2196F3'} />
+              </View>
+              <Text style={styles.actionText}>Chat with AI</Text>
+            </TouchableOpacity>
+          </Link>
+          <Link href="/(app)/(tabs)/records" asChild>
+            <TouchableOpacity style={styles.actionCard}>
+              <View style={[styles.actionIconContainer, { backgroundColor: '#E8F5E9' }]}> 
+                <FileText size={24} color={ExtendedColors.success || '#008000'} />
+              </View>
+              <Text style={styles.actionText}>Upload Docs</Text>
+            </TouchableOpacity>
+          </Link>
+          <Link href="/(app)/(tabs)/pharmacy" asChild>
+            <TouchableOpacity style={styles.actionCard}>
+              <View style={[styles.actionIconContainer, { backgroundColor: '#FFF3E0' }]}> 
+                <Pill size={24} color="#FF9800" />
+              </View>
+              <Text style={styles.actionText}>Pharmacy</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
       </>
     );
   };
@@ -261,7 +406,6 @@ export default function HomeScreen() {
     return (
       <>
         {renderEmergencyBanner()}
-        
         <View style={styles.welcomeSection}>
           <View>
             <Text style={styles.welcomeText}>Welcome back,</Text>
@@ -271,147 +415,80 @@ export default function HomeScreen() {
             <Bell size={24} color={ExtendedColors.text || '#000000'} />
           </TouchableOpacity>
         </View>
-
-        <View style={styles.todayScheduleSection}>
-          <Text style={styles.sectionTitle}>Today's Schedule</Text>
-          <View style={styles.scheduleContainer}>
-            <View style={styles.timeSlots}>
-              <View style={[styles.timeSlot, styles.timeSlotActive]}>
-                <Text style={styles.timeSlotText}>8:00</Text>
-                <View style={styles.timeSlotDot} />
-              </View>
-              <View style={[styles.timeSlot, styles.timeSlotActive]}>
-                <Text style={styles.timeSlotText}>9:30</Text>
-                <View style={styles.timeSlotDot} />
-              </View>
-              <View style={[styles.timeSlot, styles.timeSlotActive]}>
-                <Text style={styles.timeSlotText}>11:00</Text>
-                <View style={styles.timeSlotDot} />
-              </View>
-              <View style={[styles.timeSlot, styles.timeSlotActive, styles.timeSlotCurrent]}>
-                <Text style={styles.timeSlotText}>2:30</Text>
-                <View style={styles.timeSlotDot} />
-              </View>
-            </View>
-            <Text style={styles.nextPatientText}>
-              Next: Sarah Johnson at 2:30 PM
-            </Text>
+        
+        {/* Enhanced Upcoming Appointments with responsive pagination for doctors */}
+        <View style={styles.upcomingAppointmentsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
+            <TouchableOpacity onPress={() => router.push('/appointments')}>
+              <Text style={styles.seeAllText}>See All</Text>
+            </TouchableOpacity>
           </View>
-        </View>
-
-        <View style={styles.criticalCareSection}>
-          <Text style={styles.sectionTitle}>Critical Patient Alerts</Text>
-          <View style={styles.criticalCareContainer}>
-            <View style={styles.criticalCareItem}>
-              <Text style={styles.criticalCareLabel}>Sarah Johnson</Text>
-              <Text style={[styles.criticalCareValue, styles.critical]}>High BP Alert</Text>
+          
+          {upcomingAppointments.length > 0 ? (
+            <>
+              <ScrollView
+                ref={scrollViewRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.enhancedCardsScrollView}
+                contentContainerStyle={styles.enhancedCardsContainer}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+                pagingEnabled={false}
+                decelerationRate="fast"
+                snapToInterval={cardWidth + cardSpacing}
+                snapToAlignment="start"
+              >
+                {upcomingAppointments.map((appointment) => (
+                  <View key={appointment.id} style={[styles.enhancedCardWrapper, { width: cardWidth }]}>
+                    {renderAppointmentCard(appointment, true)}
+                  </View>
+                ))}
+              </ScrollView>
+              {renderPaginationDots(upcomingAppointments.length)}
+            </>
+          ) : (
+            <View style={styles.noAppointmentsContainer}>
+              <Text style={styles.noAppointmentsText}>No upcoming appointments</Text>
             </View>
-            <View style={styles.criticalCareItem}>
-              <Text style={styles.criticalCareLabel}>Robert Garcia</Text>
-              <Text style={[styles.criticalCareValue, styles.normal]}>Stable</Text>
-            </View>
-          </View>
+          )}
         </View>
-
+        
+        {/* Quick Actions remain unchanged */}
         <View style={styles.quickActionsSection}>
           <Link href="/(app)/(tabs)/appointments" asChild>
             <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIconContainer, { backgroundColor: ExtendedColors.primaryLight || '#E0F7FA' }]}>
+              <View style={[styles.actionIconContainer, { backgroundColor: ExtendedColors.primaryLight || '#E0F7FA' }]}> 
                 <Calendar size={24} color={ExtendedColors.primary || '#007BFF'} />
               </View>
               <Text style={styles.actionText}>Schedule</Text>
             </TouchableOpacity>
           </Link>
-          
           <Link href="/patients" asChild>
             <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIconContainer, { backgroundColor: '#E3F2FD' }]}>
+              <View style={[styles.actionIconContainer, { backgroundColor: '#E3F2FD' }]}> 
                 <FileText size={24} color={ExtendedColors.info || '#2196F3'} />
               </View>
               <Text style={styles.actionText}>Patients</Text>
             </TouchableOpacity>
           </Link>
-          
           <Link href="/diagnostic-tools" asChild>
             <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIconContainer, { backgroundColor: '#E8F5E9' }]}>
+              <View style={[styles.actionIconContainer, { backgroundColor: '#E8F5E9' }]}> 
                 <MessageSquare size={24} color={ExtendedColors.success || '#008000'} />
               </View>
               <Text style={styles.actionText}>Diagnostics</Text>
             </TouchableOpacity>
           </Link>
-          
           <Link href="/(app)/(tabs)/pharmacy" asChild>
             <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIconContainer, { backgroundColor: '#FFF3E0' }]}>
+              <View style={[styles.actionIconContainer, { backgroundColor: '#FFF3E0' }]}> 
                 <Pill size={24} color="#FF9800" />
               </View>
               <Text style={styles.actionText}>Prescribe</Text>
             </TouchableOpacity>
           </Link>
-        </View>
-
-        <View style={styles.patientUpdatesSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Patient Updates</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAllText}>View All</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {upcomingAppointments.length > 0 ? (
-            upcomingAppointments.slice(0, 5).map((appointment) => (
-              <View key={String(appointment.id)} style={styles.patientCard}>
-                <View style={styles.patientCardHeader}>
-                  <View style={styles.patientIconContainer}>
-                    <UserIcon size={20} color={ExtendedColors.primary || '#007BFF'} />
-                  </View>
-                  <View style={styles.patientInfo}>
-                    <Text style={styles.patientName}>
-                      {(() => {
-                        const patientDetails = appointment.patientDetails;
-                        if (!patientDetails?.name) return 'Unknown Patient';
-                        
-                        if (Array.isArray(patientDetails.name)) {
-                          return patientDetails.name[0]?.text || 'Unknown Patient';
-                        }
-                        
-                        if (typeof patientDetails.name === 'object') {
-                          return patientDetails.name?.text || 'Unknown Patient';
-                        }
-                        
-                        return patientDetails.name || 'Unknown Patient';
-                      })()}
-                    </Text>
-                    <Text style={styles.patientReason}>
-                      Reason: {appointment.reason}
-                    </Text>
-                  </View>
-                  <Text style={styles.appointmentTime}>{appointment.time}</Text>
-                </View>
-                <View style={styles.patientCardActions}>
-                  <TouchableOpacity 
-                    style={styles.patientCardButton}
-                    onPress={() => {
-                      const patientId = appointment.patientDetails?.id || appointment.patient_id;
-                      console.log('Navigating to patient-monitoring for patientId:', patientId);
-                      router.push(`/patient-monitoring?patientId=${patientId}`);
-                    }}
-                  >
-                    <Text style={styles.patientCardButtonText}>View Records</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.patientCardButton}
-                    onPress={() => router.push('/(app)/(tabs)/chat')}
-                  >
-                    <Text style={styles.patientCardButtonText}>Send Message</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.noAppointmentsText}>No patient updates</Text>
-          )}
         </View>
       </>
     );
@@ -602,37 +679,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 20,
   },
   seeAllText: {
     fontSize: 14,
     color: ExtendedColors.primary || '#007BFF',
+    fontWeight: '600',
   },
   noAppointmentsContainer: {
-    backgroundColor: ExtendedColors.card || '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
     alignItems: 'center',
+    paddingVertical: 40,
+    backgroundColor: ExtendedColors.card || '#FFFFFF',
+    borderRadius: 16,
+    marginVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 2,
   },
   noAppointmentsText: {
-    fontSize: 14,
-    color: ExtendedColors.textSecondary || '#707070',
-    marginBottom: 12,
+    fontSize: 16,
+    color: ExtendedColors.textSecondary || '#6c757d',
+    marginBottom: 20,
+    textAlign: 'center',
+    fontWeight: '500',
   },
   bookAppointmentButton: {
     backgroundColor: ExtendedColors.primary || '#007BFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: ExtendedColors.primary || '#007BFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   bookAppointmentText: {
-    color: '#FFFFFF',
-    fontWeight: '500',
+    color: ExtendedColors.background || '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   todayScheduleSection: {
     backgroundColor: ExtendedColors.card || '#FFFFFF',
@@ -739,5 +826,126 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: ExtendedColors.primary || '#007BFF',
     fontWeight: '500',
+  },
+  enhancedAppointmentCard: {
+    backgroundColor: ExtendedColors.card || '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    height: 200, // Reduced height since we removed the notes section
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: ExtendedColors.border || '#E0E0E0',
+    marginBottom: 0, // Remove bottom margin for carousel
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  cardStatus: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: ExtendedColors.text || '#000000',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  urgentBadge: {
+    backgroundColor: ExtendedColors.warning || '#ffc107',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
+  urgentText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: ExtendedColors.background || '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  urgentCard: {
+    borderLeftWidth: 6,
+    borderLeftColor: ExtendedColors.warning || '#ffc107',
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardInfoText: {
+    fontSize: 14,
+    color: ExtendedColors.textSecondary || '#6c757d',
+    marginLeft: 10,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  reasonContainer: {
+    marginTop: 16,
+    flex: 1, // Take remaining space
+  },
+  reasonLabel: {
+    fontSize: 11,
+    color: ExtendedColors.textSecondary || '#6c757d',
+    marginBottom: 8,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  reasonText: {
+    fontSize: 15,
+    color: ExtendedColors.text || '#000000',
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  enhancedCardWrapper: {
+    marginRight: 16,
+    height: 200, // Match reduced card height
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  paginationDotContainer: {
+    padding: 6,
+  },
+  paginationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: ExtendedColors.textSecondary || '#D1D5DB',
+    marginHorizontal: 4,
+  },
+  paginationDotActive: {
+    backgroundColor: ExtendedColors.primary || '#007BFF',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  enhancedCardsScrollView: {
+    marginVertical: 12,
+  },
+  enhancedCardsContainer: {
+    paddingHorizontal: 20,
   },
 });
