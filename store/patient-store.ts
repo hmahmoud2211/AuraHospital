@@ -104,7 +104,8 @@ export const usePatientStore = create<PatientState>()(
           console.log(`🔍 Fetching all patients for doctor ID: ${doctorId}`);
           
           // Fetch ALL appointments for this doctor (regardless of status or date)
-          const appointmentsResponse = await fetch(`${API_URL}/appointments/?doctor_id=${doctorId}`, {
+          // The backend now handles authorization automatically based on the authenticated user
+          const appointmentsResponse = await fetch(`${API_URL}/appointments/`, {
             headers: getAuthHeaders(),
           });
           
