@@ -44,14 +44,8 @@ export const useAppointmentStore = create<AppointmentState>()(
         try {
           console.log(`📅 Fetching appointments for ${userRole} with ID: ${userId}`);
           
-          const params = new URLSearchParams();
-          if (userRole === 'patient') {
-            params.append('patient_id', userId);
-          } else if (userRole === 'doctor' || userRole === 'practitioner') {
-            params.append('doctor_id', userId);
-          }
-          
-          const url = `${API_URL}/appointments/?${params.toString()}`;
+          // The backend now handles authorization automatically based on the authenticated user
+          const url = `${API_URL}/appointments/`;
           console.log(`📅 Making request to: ${url}`);
           
           const response = await fetch(url, {
