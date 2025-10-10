@@ -6,6 +6,7 @@ import { Settings, User, Heart, Bell, Shield, HelpCircle, LogOut, DollarSign } f
 import Colors from '@/constants/colors';
 import Typography from '@/constants/typography';
 import Header from '@/components/Header';
+import EmergencyAlertButton from '@/components/EmergencyAlertButton';
 import { useAuthStore } from '@/store/auth-store';
 
 export default function ProfileScreen() {
@@ -117,6 +118,11 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
         
+        {/* Emergency Alert Section - Only for patients */}
+        {user?.role?.toLowerCase() === 'patient' && (
+          <EmergencyAlertButton />
+        )}
+        
         {/* User Data Section */}
         <View style={styles.infoSection}>
           {(user && (user as any).medicalRecordNumber) && (
@@ -202,6 +208,19 @@ export default function ProfileScreen() {
             <View style={styles.menuContent}>
               <Text style={styles.menuTitle}>Health Data</Text>
               <Text style={styles.menuDescription}>View and manage your health data</Text>
+            </View>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={() => router.push('/emergency-contacts')}
+          >
+            <View style={[styles.menuIconContainer, { backgroundColor: '#FFEBEE' }]}>
+              <Heart size={20} color={Colors.danger} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>Emergency Contacts</Text>
+              <Text style={styles.menuDescription}>Manage your emergency contacts</Text>
             </View>
           </TouchableOpacity>
           
