@@ -4,7 +4,7 @@ from tortoise.contrib.fastapi import register_tortoise
 from backend.auth import router as auth_router
 from backend.models import Patient, Practitioner, Practitioner_Pydantic
 from typing import List, Dict, Any
-from backend.routers import appointments, pharmacy, laborist, medical_records
+from backend.routers import appointments, pharmacy, laborist, medical_records, emergency_contacts
 
 app = FastAPI(
     title="Aura Hospital API",
@@ -27,6 +27,7 @@ app.include_router(appointments.router, prefix="/api", tags=["appointments"])
 app.include_router(pharmacy.router, prefix="/api/pharmacy", tags=["pharmacy"])
 app.include_router(laborist.router, prefix="/api/laborist", tags=["laborist"])
 app.include_router(medical_records.router, prefix="/api/medical-records", tags=["medical-records"])
+app.include_router(emergency_contacts.router, prefix="/api", tags=["emergency-contacts"])
 
 # Database configuration
 TORTOISE_ORM = {
