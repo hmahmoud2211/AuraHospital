@@ -94,7 +94,7 @@ export default function BookAppointmentScreen() {
           await fetchAppointments(String(user.id), user.role);
         }
         Alert.alert('Success', 'Your appointment has been booked.', [
-          { text: 'OK', onPress: () => router.replace('/appointments') }
+          { text: 'OK', onPress: () => router.replace('/(app)/(tabs)/appointments') }
         ]);
       }
     } catch (error) {

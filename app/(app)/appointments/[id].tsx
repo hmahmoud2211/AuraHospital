@@ -85,7 +85,7 @@ export default function AppointmentDetailsScreen() {
   
   const handleReschedule = () => {
     router.push({
-      pathname: '/appointments/reschedule',
+      pathname: '/(app)/appointments/reschedule',
       params: { id: selectedAppointment.id?.toString() || '' }
     });
   };

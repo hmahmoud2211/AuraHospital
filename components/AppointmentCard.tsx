@@ -45,7 +45,7 @@ const AppointmentCard: React.FC<AppointmentCardProps> = ({
   };
 
   const handlePress = () => {
-    router.push(`/appointments/${appointment.id}`);
+    router.push(`/(app)/appointments/${appointment.id}`);
   };
 
   const isUpcoming = () => {

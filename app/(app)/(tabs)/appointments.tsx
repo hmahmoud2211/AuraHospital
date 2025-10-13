@@ -11,7 +11,7 @@ import Button from '@/components/Button';
 import { useAuthStore } from '@/store/auth-store';
 import { useAppointmentStore } from '@/store/appointment-store';
 
-export default function AppointmentsScreen() {
+export default function AppointmentsTabScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { appointments, fetchAppointments, isLoading, error } = useAppointmentStore();
@@ -83,11 +83,11 @@ export default function AppointmentsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <Header 
         title="Appointments" 
-        showBack={true}
+        showBack={false}
         rightComponent={
           <TouchableOpacity 
             style={styles.addButton}
-            onPress={() => router.push('/appointments/book')}
+            onPress={() => router.push('/(app)/appointments/book')}
           >
             <Plus size={24} color={Colors.background} />
           </TouchableOpacity>
@@ -206,7 +206,7 @@ export default function AppointmentsScreen() {
             </Text>
             <Button
               title="Book Appointment"
-              onPress={() => router.push('/appointments/book')}
+              onPress={() => router.push('/(app)/appointments/book')}
               style={styles.bookButton}
             />
           </View>
@@ -310,3 +310,4 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
 });
+

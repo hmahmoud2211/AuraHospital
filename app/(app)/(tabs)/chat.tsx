@@ -3,7 +3,7 @@ import { View, StyleSheet } from "react-native";
 import MedicalAssistantScreen from "../../screens/MedicalAssistantScreen";
 import Colors from "@/constants/colors";
 
-export default function ChatScreen() {
+export default function ChatTabScreen() {
   return (
     <View style={styles.container}>
       <MedicalAssistantScreen />
@@ -16,4 +16,5 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-}); 
+});
+
