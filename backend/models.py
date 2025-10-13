@@ -522,6 +522,13 @@ LabResultIn_Pydantic = pydantic_model_creator(LabResult, name="LabResultIn", exc
 ImagingResult_Pydantic = pydantic_model_creator(ImagingResult, name="ImagingResult")
 ImagingResultIn_Pydantic = pydantic_model_creator(ImagingResult, name="ImagingResultIn", exclude_readonly=True)
 
+# Emergency Contact Pydantic models
+EmergencyContact_Pydantic = pydantic_model_creator(EmergencyContact, name="EmergencyContact")
+EmergencyContactIn_Pydantic = pydantic_model_creator(EmergencyContact, name="EmergencyContactIn", exclude_readonly=True)
+
+EmergencyAlert_Pydantic = pydantic_model_creator(EmergencyAlert, name="EmergencyAlert")
+EmergencyAlertIn_Pydantic = pydantic_model_creator(EmergencyAlert, name="EmergencyAlertIn", exclude_readonly=True)
+
 # Define explicit Pydantic models for Appointment
 class AppointmentIn(BaseModel):
     patient_id: int
@@ -840,6 +847,71 @@ class ImagingResultCreate(BaseModel):
     radiologist_id: int
     facility: str
     accession_number: Optional[str] = None
+
+# Emergency Contact Models
+class EmergencyContact(models.Model):
+    """Patient emergency contacts"""
+    id = fields.IntField(pk=True)
+    patient = fields.ForeignKeyField('models.Patient', related_name='emergency_contacts')
+    name = fields.CharField(max_length=255)
+    relationship = fields.CharField(max_length=100)  # spouse, parent, sibling, friend, etc.
+    phone_number = fields.CharField(max_length=20)
+    is_primary = fields.BooleanField(default=False)  # Primary emergency contact
+    is_active = fields.BooleanField(default=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+    
+    class Meta:
+        table = "emergency_contacts"
+
+class EmergencyAlert(models.Model):
+    """Emergency alerts sent by patients"""
+    id = fields.IntField(pk=True)
+    patient = fields.ForeignKeyField('models.Patient', related_name='emergency_alerts')
+    emergency_contact = fields.ForeignKeyField('models.EmergencyContact', related_name='alerts')
+    alert_type = fields.CharField(max_length=50, default='emergency')  # emergency, medical, location
+    latitude = fields.DecimalField(max_digits=10, decimal_places=7, null=True)
+    longitude = fields.DecimalField(max_digits=10, decimal_places=7, null=True)
+    location_address = fields.CharField(max_length=500, null=True)
+    message_sent = fields.TextField()  # The actual message sent via WhatsApp
+    whatsapp_url = fields.CharField(max_length=1000)  # The WhatsApp URL used
+    status = fields.CharField(max_length=20, default='sent')  # sent, delivered, failed
+    response_received = fields.BooleanField(default=False)
+    response_message = fields.TextField(null=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    
+    class Meta:
+        table = "emergency_alerts"
+
+# Emergency Contact Pydantic models for operations
+class EmergencyContactCreate(BaseModel):
+    patient_id: int
+    name: str
+    relationship: str
+    phone_number: str
+    is_primary: bool = False
+
+class EmergencyContactUpdate(BaseModel):
+    name: Optional[str] = None
+    relationship: Optional[str] = None
+    phone_number: Optional[str] = None
+    is_primary: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+class EmergencyAlertCreate(BaseModel):
+    patient_id: int
+    emergency_contact_id: int
+    alert_type: str = 'emergency'
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_address: Optional[str] = None
+    message_sent: str
+    whatsapp_url: str
+
+class EmergencyAlertUpdate(BaseModel):
+    status: Optional[str] = None
+    response_received: Optional[bool] = None
+    response_message: Optional[str] = None
 
 # Response models for comprehensive patient data
 class PatientSummary(BaseModel):
