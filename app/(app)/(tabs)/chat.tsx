@@ -1,20 +1,5 @@
-import React from "react";
-import { View, StyleSheet } from "react-native";
-import MedicalAssistantScreen from "../../screens/MedicalAssistantScreen";
-import Colors from "@/constants/colors";
+// Chat Tab Screen - Proxy to Chatbot Module
+import ChatScreen from '@/app/chatbot/screens/chat';
 
-export default function ChatTabScreen() {
-  return (
-    <View style={styles.container}>
-      <MedicalAssistantScreen />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-});
+export default ChatScreen;
 

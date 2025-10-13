@@ -1,8 +1,8 @@
 import React from "react";
 import { Tabs } from "expo-router";
 import { Home, Calendar, FileText, User, Pill, MessageSquare, Package } from "lucide-react-native";
-import Colors from "@/constants/colors";
-import { useAuthStore } from "@/store/auth-store";
+import Colors from "@/app/shared/constants/colors";
+import { useAuthStore } from "@/app/(auth)/store";
 
 export default function TabLayout() {
   const { user } = useAuthStore();
